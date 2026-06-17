@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Masona Farms",
+    "slug": "masona-farms",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "masona",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": ["**/*"],
+    "android": {
+      "package": "com.masonafarms.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#06452d"
+      },
+      "permissions": ["READ_MEDIA_IMAGES", "READ_EXTERNAL_STORAGE"]
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Masona Farms uses photos for crop progress, problem reports, receipts, and before/after treatment records."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#07945f"
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": false
+    },
+    "extra": {
+      "offlineFirst": true
+    }
+  }
+}
