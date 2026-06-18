@@ -4,7 +4,7 @@ baseline_commit: 1d497f427c72fdda4d85d984350f26f6d9c4d516
 
 # Story 1.1: Add Versioned Local Migrations Without Changing Farmer Workflows
 
-Status: in-progress
+Status: done
 
 Completion note: Ultimate context engine analysis completed - comprehensive developer guide created.
 
@@ -50,10 +50,17 @@ so that I can continue using Masona Farms without losing field, crop-cycle, phot
   - [x] Cover repeated initialization.
   - [x] Cover soft-archived records staying hidden from normal record lists.
   - [x] Cover existing profile, fields, crop cycles, records, photos, and reminders remaining readable.
-- [ ] Verify farmer-visible flows still work. (AC: 3, 4, 5, 6)
+- [x] Verify farmer-visible flows still work. (AC: 3, 4, 5, 6)
   - [x] Run `npm run typecheck`.
   - [x] If tests are added, run the relevant test command.
-  - [ ] Manually verify first-run profile setup, existing profile load, field list, crop-cycle list, record list, photo list, reminder list, archive behavior, and adding a new record.
+  - [x] Manually verify first-run profile setup, existing profile load, field list, crop-cycle list, record list, photo list, reminder list, archive behavior, and adding a new record.
+
+### Review Findings
+
+- [x] [Review][Patch] Open the SQLite database lazily so startup failures are caught by the farmer-facing alert [src/data/farmRepository.ts:6]
+- [x] [Review][Patch] Keep profile and farm data reads inside the startup failure guard [App.tsx:81]
+- [x] [Review][Patch] Reject duplicate migration ids before applying migrations [src/db/migrate.ts:17]
+- [x] [Review][Patch] Validate applied migration names before skipping migration ids [src/db/migrate.ts:21]
 
 ## Dev Notes
 
@@ -188,7 +195,8 @@ GPT-5 Codex
 
 - 2026-06-18: `npm run test:migrations` passed: fresh baseline, existing current-schema baseline, repeated initialization idempotency, legacy additive columns, failed migration rollback, preserved repository reads, and soft-archived records hidden from normal record lists.
 - 2026-06-18: `npm run typecheck` passed.
-- 2026-06-18: Manual Expo/device verification not run in this terminal session; farmer-visible flow checklist remains open.
+- 2026-06-18: Manual verification reported passed by Chimwemwe: first-run profile, existing profile/data load, field/crop-cycle list, record list, archive behavior, photo/reminder list, add new record, and restart/no duplicates.
+- 2026-06-18: Code review patches applied. `npm run test:migrations` passed with 7 tests, including lazy repository load, duplicate migration id rejection, and applied migration name mismatch rejection. `npm run typecheck` passed.
 
 ### Completion Notes List
 
@@ -198,7 +206,8 @@ GPT-5 Codex
 - Refactored `initializeDatabase()` to run migrations first, then preserve existing `app_meta.seeded`, crop-cycle backfill, and old record linking behavior.
 - Added a plain-language startup alert if database preparation fails: "Your records are still saved on this phone."
 - Added focused migration regression tests using Node built-in test tooling and the installed TypeScript compiler, without adding a new dependency.
-- Remaining limitation: manual Expo/device verification must still be completed before this story can move to review.
+- Manual Expo/device verification passed; story is ready for review.
+- Resolved code review findings by opening SQLite lazily, guarding startup reads, and validating migration ids/names before skipping migrations.
 
 ### File List
 
@@ -218,3 +227,5 @@ GPT-5 Codex
 - 2026-06-18: Added local versioned migration runner and baseline schema migration.
 - 2026-06-18: Refactored repository initialization to use migrations while preserving current public APIs.
 - 2026-06-18: Added lightweight migration regression tests and startup failure copy.
+- 2026-06-18: Completed manual verification and moved story to review.
+- 2026-06-18: Applied code review fixes and moved story to done.

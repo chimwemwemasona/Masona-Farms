@@ -9,7 +9,8 @@
     "android": "expo start --android",
     "android:offline": "expo start --android --offline --clear",
     "typecheck": "tsc --noEmit",
-    "test:migrations": "node scripts/run-migration-tests.mjs"
+    "test:migrations": "node scripts/run-migration-tests.mjs",
+    "test:regression": "node scripts/run-regression-tests.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",

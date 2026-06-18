@@ -3,7 +3,12 @@ import { runMigrations } from "../db/migrate";
 import { getCropTimeline } from "./cropPractices";
 import type { CropCycle, CropField, FarmRecord, FieldInput, PhotoInput, PhotoRecord, RecordInput, Reminder, ReminderInput, UserProfile, UserProfileInput } from "./types";
 
-const db = openFarmDatabase();
+let db: ReturnType<typeof openFarmDatabase> | null = null;
+
+function getDatabase() {
+  db ??= openFarmDatabase();
+  return db;
+}
 
 type FieldRow = {
   id: string;
@@ -78,32 +83,33 @@ type UserProfileRow = {
 };
 
 export function initializeDatabase() {
-  runMigrations(db);
+  const database = getDatabase();
+  runMigrations(database);
 
-  const seeded = db.getFirstSync<{ value: string }>("SELECT value FROM app_meta WHERE key = ?", ["seeded"]);
+  const seeded = database.getFirstSync<{ value: string }>("SELECT value FROM app_meta WHERE key = ?", ["seeded"]);
   if (seeded?.value === "true") {
     ensureCropCyclesForExistingFields();
     migrateExistingRecordsToCropCycles();
     return;
   }
 
-  db.runSync("INSERT INTO app_meta (key, value) VALUES (?, ?)", ["seeded", "true"]);
+  database.runSync("INSERT INTO app_meta (key, value) VALUES (?, ?)", ["seeded", "true"]);
 }
 
 export function getFields(): CropField[] {
-  return db
+  return getDatabase()
     .getAllSync<FieldRow>("SELECT id, crop, field, area, variety, planting_date, expected_harvest, stage, progress, status, accent FROM fields ORDER BY created_at DESC, field ASC")
     .map(mapField);
 }
 
 export function getCropCycles(): CropCycle[] {
-  return db
+  return getDatabase()
     .getAllSync<CropCycleRow>("SELECT id, field_id, field, crop, variety, planting_date, expected_harvest, stage, status FROM crop_cycles WHERE status = ? ORDER BY created_at DESC", ["Active"])
     .map(mapCropCycle);
 }
 
 export function getRecords(): FarmRecord[] {
-  return db
+  return getDatabase()
     .getAllSync<RecordRow>("SELECT id, type, field, crop_cycle_id, crop_cycle_name, detail, quantity, date, amount, icon, tone, deleted_at FROM records WHERE deleted_at IS NULL ORDER BY created_at DESC, date DESC")
     .map((record) => ({
       id: record.id,
@@ -122,7 +128,7 @@ export function getRecords(): FarmRecord[] {
 }
 
 export function getPhotos(): PhotoRecord[] {
-  return db
+  return getDatabase()
     .getAllSync<PhotoRow>("SELECT id, field, category, record_id, record_label, uri, caption, created_at FROM photos ORDER BY created_at DESC")
     .map((photo) => ({
       id: photo.id,
@@ -137,7 +143,7 @@ export function getPhotos(): PhotoRecord[] {
 }
 
 export function getReminders(): Reminder[] {
-  return db
+  return getDatabase()
     .getAllSync<ReminderRow>("SELECT id, title, detail, field, due_at, tone, icon, notification_id FROM reminders ORDER BY due_at ASC")
     .map((reminder) => ({
       id: reminder.id,
@@ -150,7 +156,7 @@ export function getReminders(): Reminder[] {
 }
 
 export function getUserProfile(): UserProfile | null {
-  const row = db.getFirstSync<UserProfileRow>("SELECT id, farmer_name, farm_name, location, created_at, onboarding_completed FROM user_profiles LIMIT 1");
+  const row = getDatabase().getFirstSync<UserProfileRow>("SELECT id, farmer_name, farm_name, location, created_at, onboarding_completed FROM user_profiles LIMIT 1");
   if (!row) return null;
   return {
     id: row.id,
@@ -172,7 +178,7 @@ export function saveUserProfile(input: UserProfileInput): UserProfile {
     createdAt: existing?.createdAt ?? new Date().toISOString(),
     onboardingCompleted: true
   };
-  db.runSync(
+  getDatabase().runSync(
     `INSERT INTO user_profiles (id, farmer_name, farm_name, location, created_at, onboarding_completed)
      VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
@@ -186,12 +192,13 @@ export function saveUserProfile(input: UserProfileInput): UserProfile {
 }
 
 export function resetFarmData() {
-  db.withTransactionSync(() => {
-    db.runSync("DELETE FROM records");
-    db.runSync("DELETE FROM photos");
-    db.runSync("DELETE FROM reminders");
-    db.runSync("DELETE FROM crop_cycles");
-    db.runSync("DELETE FROM fields");
+  const database = getDatabase();
+  database.withTransactionSync(() => {
+    database.runSync("DELETE FROM records");
+    database.runSync("DELETE FROM photos");
+    database.runSync("DELETE FROM reminders");
+    database.runSync("DELETE FROM crop_cycles");
+    database.runSync("DELETE FROM fields");
   });
 }
 
@@ -205,7 +212,7 @@ export function addField(input: FieldInput): CropField {
     daysAfterPlanting: timeline.daysAfterPlanting,
     progressSource: timeline.progressSource
   };
-  db.runSync(
+  getDatabase().runSync(
     "INSERT INTO fields (id, crop, field, area, variety, planting_date, expected_harvest, stage, progress, status, accent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [field.id, field.crop, field.field, field.area, field.variety, field.plantingDate, field.expectedHarvest, field.stage, field.progress, field.status, field.accent, new Date().toISOString()]
   );
@@ -214,8 +221,9 @@ export function addField(input: FieldInput): CropField {
 }
 
 export function updateField(fieldId: string, input: FieldInput): CropField {
-  const existingField = db.getFirstSync<FieldRow>("SELECT id, crop, field, area, variety, planting_date, expected_harvest, stage, progress, status, accent FROM fields WHERE id = ? LIMIT 1", [fieldId]);
-  const existingCycle = db.getFirstSync<CropCycleRow>("SELECT id, field_id, field, crop, variety, planting_date, expected_harvest, stage, status FROM crop_cycles WHERE field_id = ? AND status = ? LIMIT 1", [fieldId, "Active"]);
+  const database = getDatabase();
+  const existingField = database.getFirstSync<FieldRow>("SELECT id, crop, field, area, variety, planting_date, expected_harvest, stage, progress, status, accent FROM fields WHERE id = ? LIMIT 1", [fieldId]);
+  const existingCycle = database.getFirstSync<CropCycleRow>("SELECT id, field_id, field, crop, variety, planting_date, expected_harvest, stage, status FROM crop_cycles WHERE field_id = ? AND status = ? LIMIT 1", [fieldId, "Active"]);
   const timeline = getCropTimeline(input.crop, input.plantingDate, input.expectedHarvest, input.progress, input.stage);
   const field: CropField = {
     id: fieldId,
@@ -226,25 +234,25 @@ export function updateField(fieldId: string, input: FieldInput): CropField {
     progressSource: timeline.progressSource
   };
 
-  db.withTransactionSync(() => {
-    db.runSync(
+  database.withTransactionSync(() => {
+    database.runSync(
       "UPDATE fields SET crop = ?, field = ?, area = ?, variety = ?, planting_date = ?, expected_harvest = ?, stage = ?, progress = ?, status = ?, accent = ? WHERE id = ?",
       [field.crop, field.field, field.area, field.variety, field.plantingDate, field.expectedHarvest, field.stage, field.progress, field.status, field.accent, field.id]
     );
     if (existingCycle) {
       const label = cycleLabel(field.crop, field.field, field.variety);
-      db.runSync(
+      database.runSync(
         "UPDATE crop_cycles SET field = ?, crop = ?, variety = ?, planting_date = ?, expected_harvest = ?, stage = ? WHERE id = ?",
         [field.field, field.crop, field.variety, field.plantingDate, field.expectedHarvest, field.stage, existingCycle.id]
       );
-      db.runSync("UPDATE records SET field = ?, crop_cycle_name = ? WHERE crop_cycle_id = ?", [field.field, label, existingCycle.id]);
+      database.runSync("UPDATE records SET field = ?, crop_cycle_name = ? WHERE crop_cycle_id = ?", [field.field, label, existingCycle.id]);
     } else {
       insertCropCycleForField(field, new Date().toISOString());
     }
     if (existingField?.field && existingField.field !== field.field) {
-      db.runSync("UPDATE records SET field = ? WHERE field = ?", [field.field, existingField.field]);
-      db.runSync("UPDATE photos SET field = ? WHERE field = ?", [field.field, existingField.field]);
-      db.runSync("UPDATE reminders SET field = ? WHERE field = ?", [field.field, existingField.field]);
+      database.runSync("UPDATE records SET field = ? WHERE field = ?", [field.field, existingField.field]);
+      database.runSync("UPDATE photos SET field = ? WHERE field = ?", [field.field, existingField.field]);
+      database.runSync("UPDATE reminders SET field = ? WHERE field = ?", [field.field, existingField.field]);
     }
   });
 
@@ -256,7 +264,7 @@ export function addRecord(input: RecordInput): FarmRecord {
     id: createId(),
     ...input
   };
-  db.runSync(
+  getDatabase().runSync(
     "INSERT INTO records (id, type, field, crop_cycle_id, crop_cycle_name, detail, quantity, date, amount, icon, tone, deleted_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [record.id, record.type, record.field, record.cropCycleId, record.cropCycleName, record.detail, record.quantity, record.date, record.amount, record.icon, record.tone, null, new Date().toISOString()]
   );
@@ -264,7 +272,7 @@ export function addRecord(input: RecordInput): FarmRecord {
 }
 
 export function deleteRecord(recordId: string) {
-  db.runSync("UPDATE records SET deleted_at = ? WHERE id = ?", [new Date().toISOString(), recordId]);
+  getDatabase().runSync("UPDATE records SET deleted_at = ? WHERE id = ?", [new Date().toISOString(), recordId]);
 }
 
 export function addPhoto(input: PhotoInput): PhotoRecord {
@@ -278,7 +286,7 @@ export function addPhoto(input: PhotoInput): PhotoRecord {
     caption: input.caption,
     createdAt: new Date().toISOString()
   };
-  db.runSync(
+  getDatabase().runSync(
     "INSERT INTO photos (id, field, category, record_id, record_label, uri, caption, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     [photo.id, photo.field, photo.category, photo.recordId ?? null, photo.recordLabel ?? null, photo.uri, photo.caption, photo.createdAt]
   );
@@ -290,7 +298,7 @@ export function addReminder(input: ReminderInput): Reminder {
     id: createId(),
     ...input
   };
-  db.runSync(
+  getDatabase().runSync(
     "INSERT INTO reminders (id, title, detail, field, due_at, tone, icon, notification_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [reminder.id, reminder.title, reminder.detail, reminder.field, reminder.dueAt, reminder.tone, reminder.icon, reminder.notificationId ?? null, new Date().toISOString()]
   );
@@ -322,7 +330,7 @@ function insertCropCycleForField(field: CropField, createdAt: string) {
     stage: field.stage,
     status: "Active" as const
   };
-  db.runSync(
+  getDatabase().runSync(
     "INSERT INTO crop_cycles (id, field_id, field, crop, variety, planting_date, expected_harvest, stage, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [cycle.id, cycle.fieldId, cycle.field, cycle.crop, cycle.variety, cycle.plantingDate, cycle.expectedHarvest, cycle.stage, cycle.status, createdAt]
   );
@@ -339,11 +347,12 @@ function ensureCropCyclesForExistingFields() {
 }
 
 function migrateExistingRecordsToCropCycles() {
-  const records = db.getAllSync<RecordRow>("SELECT id, type, field, crop_cycle_id, crop_cycle_name, detail, quantity, date, amount, icon, tone, deleted_at FROM records WHERE crop_cycle_id IS NULL OR crop_cycle_name IS NULL");
+  const database = getDatabase();
+  const records = database.getAllSync<RecordRow>("SELECT id, type, field, crop_cycle_id, crop_cycle_name, detail, quantity, date, amount, icon, tone, deleted_at FROM records WHERE crop_cycle_id IS NULL OR crop_cycle_name IS NULL");
   records.forEach((record) => {
     const cycle = findCycleForRecordField(record.field) ?? findCycleByFieldName(record.field);
     if (!cycle) return;
-    db.runSync("UPDATE records SET crop_cycle_id = ?, crop_cycle_name = ? WHERE id = ?", [cycle.id, cycle.label, record.id]);
+    database.runSync("UPDATE records SET crop_cycle_id = ?, crop_cycle_name = ? WHERE id = ?", [cycle.id, cycle.label, record.id]);
   });
 }
 
@@ -370,7 +379,7 @@ function mapField(row: FieldRow): CropField {
 }
 
 function findCycleByFieldName(fieldName: string) {
-  const row = db.getFirstSync<CropCycleRow>("SELECT id, field_id, field, crop, variety, planting_date, expected_harvest, stage, status FROM crop_cycles WHERE field = ? AND status = ? LIMIT 1", [fieldName, "Active"]);
+  const row = getDatabase().getFirstSync<CropCycleRow>("SELECT id, field_id, field, crop, variety, planting_date, expected_harvest, stage, status FROM crop_cycles WHERE field = ? AND status = ? LIMIT 1", [fieldName, "Active"]);
   return row ? mapCropCycle(row) : undefined;
 }
 

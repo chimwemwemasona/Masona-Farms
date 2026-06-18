@@ -111,8 +111,8 @@ class FakeDatabase {
     if (tableInfoMatch) {
       return [...(this.tables.get(tableInfoMatch[1]) ?? new Set())].map((name) => ({ name }));
     }
-    if (/SELECT id FROM schema_migrations/i.test(sql)) {
-      return this.migrationRows.map((row) => ({ id: row.id }));
+    if (/SELECT id(,\s*name)? FROM schema_migrations/i.test(sql)) {
+      return this.migrationRows.map((row) => ({ id: row.id, name: row.name }));
     }
     if (/FROM fields ORDER BY created_at DESC, field ASC/i.test(sql)) return this.rows.fields;
     if (/FROM crop_cycles WHERE status = \?/i.test(sql)) return this.rows.crop_cycles.filter((row) => row.status === params[0]);
@@ -196,6 +196,26 @@ test("failed migration rolls back the attempted migration row", () => {
   assert.equal(db.migrationRows.length, 0);
 });
 
+test("migration runner rejects duplicate migration ids", () => {
+  const db = new FakeDatabase();
+  const duplicatePlan = [
+    { id: 2, name: "first", up() {} },
+    { id: 2, name: "second", up() {} }
+  ];
+
+  assert.throws(() => runMigrations(db, { migrationPlan: duplicatePlan }), /Duplicate migration id: 2/);
+});
+
+test("migration runner rejects applied ids with different names", () => {
+  const db = new FakeDatabase();
+  db.migrationRows.push({ id: 3, name: "old_name", applied_at: "2026-01-01T00:00:00.000Z", app_version: null });
+
+  assert.throws(
+    () => runMigrations(db, { migrationPlan: [{ id: 3, name: "new_name", up() {} }] }),
+    /already applied as old_name, not new_name/
+  );
+});
+
 test("repository reads preserve existing data and hide soft-archived records", () => {
   const db = createSeededCurrentDatabase();
   sqliteMockDatabase = db;
@@ -211,6 +231,16 @@ test("repository reads preserve existing data and hide soft-archived records", (
   assert.deepEqual(repository.getRecords().map((record) => record.id), ["visible-record"]);
   assert.equal(repository.getPhotos().length, 1);
   assert.equal(repository.getReminders().length, 1);
+});
+
+test("repository module can load before SQLite opens successfully", () => {
+  sqliteMockDatabase = null;
+  moduleCache.delete(path.resolve(projectRoot, "src/data/farmRepository.ts"));
+
+  const repository = loadTs("src/data/farmRepository.ts");
+
+  assert.equal(typeof repository.initializeDatabase, "function");
+  assert.throws(() => repository.initializeDatabase(), /No SQLite mock database configured/);
 });
 
 function createSeededCurrentDatabase() {
