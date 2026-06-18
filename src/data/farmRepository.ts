@@ -1,8 +1,9 @@
-import * as SQLite from "expo-sqlite";
+import { openFarmDatabase } from "../db/database";
+import { runMigrations } from "../db/migrate";
 import { getCropTimeline } from "./cropPractices";
 import type { CropCycle, CropField, FarmRecord, FieldInput, PhotoInput, PhotoRecord, RecordInput, Reminder, ReminderInput, UserProfile, UserProfileInput } from "./types";
 
-const db = SQLite.openDatabaseSync("masona-farms.db");
+const db = openFarmDatabase();
 
 type FieldRow = {
   id: string;
@@ -77,101 +78,7 @@ type UserProfileRow = {
 };
 
 export function initializeDatabase() {
-  db.execSync(`
-    PRAGMA journal_mode = WAL;
-
-    CREATE TABLE IF NOT EXISTS app_meta (
-      key TEXT PRIMARY KEY NOT NULL,
-      value TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS fields (
-      id TEXT PRIMARY KEY NOT NULL,
-      crop TEXT NOT NULL,
-      field TEXT NOT NULL,
-      area TEXT NOT NULL,
-      variety TEXT,
-      planting_date TEXT,
-      expected_harvest TEXT,
-      stage TEXT NOT NULL,
-      progress INTEGER NOT NULL,
-      status TEXT NOT NULL,
-      accent TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS records (
-      id TEXT PRIMARY KEY NOT NULL,
-      type TEXT NOT NULL,
-      field TEXT NOT NULL,
-      crop_cycle_id TEXT,
-      crop_cycle_name TEXT,
-      detail TEXT NOT NULL,
-      quantity TEXT,
-      date TEXT NOT NULL,
-      amount REAL NOT NULL,
-      icon TEXT NOT NULL,
-      tone TEXT NOT NULL,
-      deleted_at TEXT,
-      created_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS crop_cycles (
-      id TEXT PRIMARY KEY NOT NULL,
-      field_id TEXT NOT NULL,
-      field TEXT NOT NULL,
-      crop TEXT NOT NULL,
-      variety TEXT NOT NULL,
-      planting_date TEXT NOT NULL,
-      expected_harvest TEXT NOT NULL,
-      stage TEXT NOT NULL,
-      status TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS photos (
-      id TEXT PRIMARY KEY NOT NULL,
-      field TEXT NOT NULL,
-      category TEXT,
-      record_id TEXT,
-      record_label TEXT,
-      uri TEXT NOT NULL,
-      caption TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS reminders (
-      id TEXT PRIMARY KEY NOT NULL,
-      title TEXT NOT NULL,
-      detail TEXT NOT NULL,
-      field TEXT NOT NULL,
-      due_at TEXT NOT NULL,
-      tone TEXT NOT NULL,
-      icon TEXT NOT NULL,
-      notification_id TEXT,
-      created_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS user_profiles (
-      id TEXT PRIMARY KEY NOT NULL,
-      farmer_name TEXT NOT NULL,
-      farm_name TEXT NOT NULL,
-      location TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      onboarding_completed INTEGER NOT NULL
-    );
-  `);
-
-  ensureColumn("records", "crop_cycle_id", "TEXT");
-  ensureColumn("records", "crop_cycle_name", "TEXT");
-  ensureColumn("records", "deleted_at", "TEXT");
-  ensureColumn("records", "quantity", "TEXT");
-  ensureColumn("fields", "variety", "TEXT");
-  ensureColumn("fields", "planting_date", "TEXT");
-  ensureColumn("fields", "expected_harvest", "TEXT");
-  ensureColumn("photos", "category", "TEXT");
-  ensureColumn("photos", "record_id", "TEXT");
-  ensureColumn("photos", "record_label", "TEXT");
+  runMigrations(db);
 
   const seeded = db.getFirstSync<{ value: string }>("SELECT value FROM app_meta WHERE key = ?", ["seeded"]);
   if (seeded?.value === "true") {
@@ -399,12 +306,6 @@ export function addReminder(input: ReminderInput): Reminder {
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function ensureColumn(table: string, column: string, definition: string) {
-  const columns = db.getAllSync<{ name: string }>(`PRAGMA table_info(${table})`);
-  if (columns.some((item) => item.name === column)) return;
-  db.execSync(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
 function insertCropCycleForField(field: CropField, createdAt: string) {

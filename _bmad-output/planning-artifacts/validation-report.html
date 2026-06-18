@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PRD Validation: Masona Farms Platform Normalization</title>
+<style>
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; background: #fafaf9; color: #1c1917; line-height: 1.6; }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px 64px; }
+  header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 1px solid #e7e5e4; padding-bottom: 16px; margin-bottom: 24px; }
+  h1 { margin: 0; font-size: 22px; }
+  h2 { margin-top: 28px; font-size: 18px; }
+  .subtitle { color: #78716c; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; }
+  .grade { background: #d97706; color: white; border-radius: 8px; padding: 10px 18px; font-weight: 700; height: fit-content; }
+  .card, details { background: white; border: 1px solid #e7e5e4; border-radius: 8px; padding: 16px 20px; margin-bottom: 12px; }
+  summary { cursor: pointer; font-weight: 700; }
+  .sev-high { color: #ea580c; font-weight: 700; }
+  .sev-medium { color: #ca8a04; font-weight: 700; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div>
+      <h1>Masona Farms - PRD Normalization Report</h1>
+      <div class="subtitle">_bmad-output/planning-artifacts/prd.md</div>
+    </div>
+    <div class="grade">Fair</div>
+  </header>
+
+  <div class="card">
+    <p>The normalized PRD now keeps <code>prd-original.md</code> as the product goal instead of shrinking the scope to the current app. It challenges the original requirements against the implementation by naming architecture gaps, data model gaps, migration risks, role/auth blockers, and delivery phases required to transform the local crop app into the intended multi-enterprise platform.</p>
+    <p>The current crop app is positioned as the first working wedge, not the product boundary.</p>
+  </div>
+
+  <h2>Normalization Moves</h2>
+  <div class="card">
+    <ul>
+      <li>Reinstated the original platform ambition as the target state.</li>
+      <li>Added rules for interpreting original PRD requirements against the current implementation.</li>
+      <li>Added challenge sections for platform architecture, domain model, generic records, offline sync, and security.</li>
+      <li>Restored crop, livestock, poultry, aquaculture, inventory, labour, equipment, sales, finance, roles, offline, and integration goals.</li>
+      <li>Added phased delivery from current app stabilization to platform foundation, finance/inventory, enterprise modules, and integrations.</li>
+      <li>Added migration requirements for current SQLite data.</li>
+    </ul>
+  </div>
+
+  <details open>
+    <summary>High Findings</summary>
+    <p><span class="sev-high">High:</span> Architecture decisions remain blocking: backend, identity, tenancy, APIs, and sync need architecture before implementation stories.</p>
+    <p><span class="sev-high">High:</span> Generic records cannot support the target platform. Structured module records are required.</p>
+    <p><span class="sev-high">High:</span> Offline-first needs to move from local-only storage to sync-capable platform behavior.</p>
+  </details>
+
+  <details>
+    <summary>Medium Findings</summary>
+    <p><span class="sev-medium">Medium:</span> The original scope is valid but large, so enterprise module priority still needs a product decision.</p>
+    <p><span class="sev-medium">Medium:</span> Future finance reports need a decision on operational estimates versus accounting-grade calculations.</p>
+    <p><span class="sev-medium">Medium:</span> Migration policy needs a decision on how much prototype local data must carry forward.</p>
+  </details>
+
+  <h2>Artifacts</h2>
+  <div class="card">
+    <ul>
+      <li>Normalized PRD: <code>_bmad-output/planning-artifacts/prd.md</code></li>
+      <li>Original unchanged source: <code>_bmad-output/planning-artifacts/prd-original.md</code></li>
+      <li>Markdown report: <code>_bmad-output/planning-artifacts/validation-report.md</code></li>
+      <li>Rubric review: <code>_bmad-output/planning-artifacts/review-rubric.md</code></li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

@@ -8,7 +8,8 @@
     "start:offline": "expo start --offline --clear",
     "android": "expo start --android",
     "android:offline": "expo start --android --offline --clear",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:migrations": "node scripts/run-migration-tests.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",

@@ -79,7 +79,12 @@ function MasonaApp() {
   const practiceInsights = useMemo(() => buildPracticeInsights(fields, records), [fields, records]);
 
   useEffect(() => {
-    initializeDatabase();
+    try {
+      initializeDatabase();
+    } catch {
+      Alert.alert("Could not open farm records", "Your records are still saved on this phone. Please close and reopen the app.");
+      return;
+    }
     const storedProfile = getUserProfile();
     setProfile(storedProfile);
     if (!storedProfile?.onboardingCompleted) {
