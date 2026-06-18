@@ -27,8 +27,9 @@ import { addDays, buildFarmCalendar, buildPracticeInsights, getCropPractice, toD
 import { quickActions } from "./src/data/farmData";
 import { addField, addPhoto, addRecord, addReminder, deleteRecord, getCropCycles, getFields, getPhotos, getRecords, getReminders, getUserProfile, initializeDatabase, resetFarmData, saveUserProfile, updateField } from "./src/data/farmRepository";
 import type { CropCycle, CropField, FarmRecord, FieldInput, FieldStatus, PhotoInput, PhotoRecord, RecordInput, Reminder, UserProfile, UserProfileInput } from "./src/data/types";
-import { buildAgronomistSummary, buildReportCsv, buildReportHtml, buildShareReport, calculateFarmTotals, calculateFieldReportValues, getBestCrop } from "./src/reports/currentReportRules";
+import { buildDashboardMetrics, buildReportModel, calculateFarmTotals, type DashboardMetric } from "./src/reports/currentReportRules";
 import { nextMorningDate, scheduleFarmReminder } from "./src/services/notifications";
+import { createReportExportActions } from "./src/services/reportExports";
 import { colors, radii, spacing } from "./src/theme";
 
 type TabKey = "Home" | "Fields" | "Records" | "Calendar" | "Reports" | "More";
@@ -433,14 +434,6 @@ function HomeScreen({
     </>
   );
 }
-
-type DashboardMetric = {
-  label: string;
-  value: string;
-  hint: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  tone: "green" | "teal" | "red";
-};
 
 function MasonaLogo({ size = 62 }: { size?: number }) {
   const leafSize = Math.round(size * 0.55);
@@ -1298,73 +1291,16 @@ function FormInput({
 }
 
 function ReportsScreen({ totals, fields, records, insights }: { totals: { revenue: number; expenses: number; profit: number }; fields: CropField[]; records: FarmRecord[]; insights: FarmInsight[] }) {
-  const { fieldCost, costPerHa } = calculateFieldReportValues(totals, fields);
-  const bestCrop = getBestCrop(fields, records);
-  const agronomistSummary = buildAgronomistSummary(fields, records);
-  const reportCards = [
-    ["Revenue", currency.format(totals.revenue), "All crop sales"],
-    ["Expenses", currency.format(totals.expenses), "Inputs and labor"],
-    ["Net profit", currency.format(totals.profit), "Season margin"],
-    ["Cost / field", currency.format(fieldCost), "Average spend"],
-    ["Cost / ha", currency.format(costPerHa), "Area-adjusted"],
-    ["Best crop", bestCrop.name, bestCrop.detail]
-  ];
-  async function shareReport() {
-    try {
-      await Share.share({
-        title: "Masona Farms report",
-        message: buildShareReport({
-          totals,
-          fields,
-          records,
-          bestCrop,
-          fieldCost,
-          costPerHa,
-          agronomistSummary
-        })
-      });
-    } catch {
-      Alert.alert("Share failed", "The report could not be shared right now.");
-    }
-  }
-
-  async function exportPdf() {
-    try {
-      const html = buildReportHtml({
-        totals,
-        fields,
-        records,
-        bestCrop,
-        fieldCost,
-        costPerHa,
-        agronomistSummary,
-        insights
-      });
-      const file = await Print.printToFileAsync({ html });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(file.uri, { mimeType: "application/pdf", dialogTitle: "Share Masona Farms PDF report" });
-      } else {
-        Alert.alert("PDF created", file.uri);
-      }
-    } catch {
-      Alert.alert("PDF export failed", "The report could not be exported right now.");
-    }
-  }
-
-  async function exportCsv() {
-    try {
-      const csv = buildReportCsv(fields, records);
-      const fileUri = `${FileSystem.cacheDirectory}masona-farms-report.csv`;
-      await FileSystem.writeAsStringAsync(fileUri, csv);
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, { mimeType: "text/csv", dialogTitle: "Share Masona Farms CSV report" });
-      } else {
-        await Share.share({ title: "Masona Farms CSV report", message: csv });
-      }
-    } catch {
-      Alert.alert("CSV export failed", "The report could not be exported right now.");
-    }
-  }
+  const report = buildReportModel({ totals, fields, records, insights });
+  const { shareReport, exportPdf, exportCsv } = createReportExportActions(report, {
+    cacheDirectory: FileSystem.cacheDirectory,
+    shareText: Share.share,
+    printToFile: Print.printToFileAsync,
+    isFileSharingAvailable: Sharing.isAvailableAsync,
+    shareFile: Sharing.shareAsync,
+    writeTextFile: FileSystem.writeAsStringAsync,
+    alert: Alert.alert
+  });
 
   return (
     <>
@@ -1380,7 +1316,7 @@ function ReportsScreen({ totals, fields, records, insights }: { totals: { revenu
         </Pressable>
       </View>
       <View style={styles.reportGrid}>
-        {reportCards.map(([label, value, detail]) => (
+        {report.reportCards.map(([label, value, detail]) => (
           <View key={label} style={styles.reportCard}>
             <Text style={styles.metricLabel}>{label}</Text>
             <Text style={styles.reportValue}>{value}</Text>
@@ -1390,7 +1326,7 @@ function ReportsScreen({ totals, fields, records, insights }: { totals: { revenu
       </View>
       <View style={styles.summaryCard}>
         <Text style={styles.summaryTitle}>Agronomist summary</Text>
-        <Text style={styles.summaryText}>{agronomistSummary}</Text>
+        <Text style={styles.summaryText}>{report.agronomistSummary}</Text>
       </View>
       <SectionHeader title="Benchmark Checks" />
       <View style={styles.listPanel}>{insights.map((insight, index) => <InsightRow key={insight.id} insight={insight} index={index} />)}</View>
@@ -1705,50 +1641,6 @@ function cropAccent(crop: string) {
   return getCropLibraryItem(crop).accent;
 }
 
-function buildDashboardMetrics(
-  totals: { revenue: number; expenses: number; profit: number },
-  fields: CropField[],
-  records: FarmRecord[]
-): DashboardMetric[] {
-  const salesCount = records.filter((record) => record.type === "Sale").length;
-  const expenseCount = records.filter((record) => record.type !== "Sale" && record.type !== "Harvest" && record.amount > 0).length;
-  const margin = totals.revenue ? Math.round((totals.profit / totals.revenue) * 100) : 0;
-  const uniqueCrops = new Set(fields.map((field) => field.crop)).size;
-  const recordsThisWeek = countRecordsThisWeek(records);
-  const profitTone = totals.profit < 0 ? "red" : "green";
-
-  return [
-    {
-      label: "Revenue",
-      value: currency.format(totals.revenue),
-      hint: `${salesCount} sale${salesCount === 1 ? "" : "s"} recorded`,
-      icon: "cash-outline",
-      tone: "green"
-    },
-    {
-      label: "Expenses",
-      value: currency.format(totals.expenses),
-      hint: `${expenseCount} cost record${expenseCount === 1 ? "" : "s"}`,
-      icon: "wallet-outline",
-      tone: totals.expenses > totals.revenue && totals.revenue > 0 ? "red" : "teal"
-    },
-    {
-      label: "Net profit",
-      value: currency.format(totals.profit),
-      hint: totals.revenue ? `${margin}% margin` : "Add sales to measure",
-      icon: "trending-up-outline",
-      tone: profitTone
-    },
-    {
-      label: "Farm activity",
-      value: String(records.length),
-      hint: `${fields.length} fields, ${uniqueCrops} crops, ${recordsThisWeek} this week`,
-      icon: "pulse-outline",
-      tone: "teal"
-    }
-  ];
-}
-
 function buildFilterCounts(records: FarmRecord[]) {
   return {
     All: records.length,
@@ -1822,17 +1714,6 @@ function buildUpcomingActivityReminderDate(recordDate: Date) {
   const reminderDate = dateAtHour(dayBefore, 8);
   if (reminderDate.getTime() <= Date.now()) return dateAtHour(recordDate, 8);
   return reminderDate;
-}
-
-function countRecordsThisWeek(records: FarmRecord[]) {
-  const now = new Date();
-  const sevenDaysAgo = now.getTime() - 7 * 86400000;
-  return records.filter((record) => parseRecordDate(record.date).getTime() >= sevenDaysAgo).length;
-}
-
-function parseRecordDate(value: string) {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 }
 
 function defaultRecordDetail(type: string) {

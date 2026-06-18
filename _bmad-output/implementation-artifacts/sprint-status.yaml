@@ -1,5 +1,5 @@
 # generated: 2026-06-18T10:56:56+02:00
-# last_updated: 2026-06-18T14:10:00+02:00
+# last_updated: 2026-06-18T16:30:00+02:00
 # project: Masona Farms
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-18T10:56:56+02:00
-last_updated: 2026-06-18T14:10:00+02:00
+last_updated: 2026-06-18T16:30:00+02:00
 project: Masona Farms
 project_key: NOKEY
 tracking_system: file-system
@@ -44,8 +44,8 @@ story_location: C:\Users\justp\Documents\Masona Farms\_bmad-output\implementatio
 development_status:
   epic-1: in-progress
   1-1-add-versioned-local-migrations-without-changing-farmer-workflows: done
-  1-2-add-repository-and-report-regression-tests-for-current-behavior: in-progress
-  1-3-extract-report-calculations-and-exports-from-app-tsx: backlog
+  1-2-add-repository-and-report-regression-tests-for-current-behavior: done
+  1-3-extract-report-calculations-and-exports-from-app-tsx: review
   1-4-split-current-screens-and-forms-without-behavior-change: backlog
   1-5-add-backup-and-legacy-record-safety-messaging-before-major-data-changes: backlog
   epic-1-retrospective: optional

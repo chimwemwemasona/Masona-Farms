@@ -495,6 +495,88 @@ test("current report export sources preserve rows, escaping, and plain totals", 
   assert.match(csv, /"Record","2026-02-01","Payment","East Field","","Chilli - East Field \(ABE\)","Buyer paid <cash>","Partial","400"/);
 });
 
+test("extracted dashboard metrics preserve current labels, counts, and tones", () => {
+  const { buildDashboardMetrics, calculateFarmTotals } = loadTs("src/reports/currentReportRules.ts");
+  const fields = [
+    reportField({ crop: "Chilli", field: "East Field" }),
+    reportField({ id: "field-2", crop: "Maize", field: "West Field" })
+  ];
+  const currentWeekDate = new Date().toISOString().slice(0, 10);
+  const records = [
+    reportRecord({ type: "Sale", amount: 1000, date: currentWeekDate }),
+    reportRecord({ type: "Sale", amount: 500, date: "2026-02-01" }),
+    reportRecord({ type: "Fertilizer", amount: 800, date: currentWeekDate }),
+    reportRecord({ type: "Payment", amount: 900, date: "2026-02-01" }),
+    reportRecord({ type: "Harvest", amount: 999, date: currentWeekDate })
+  ];
+
+  const metrics = buildDashboardMetrics(calculateFarmTotals(records), fields, records);
+
+  assertJsonEqual(metrics.map((metric) => metric.label), ["Revenue", "Expenses", "Net profit", "Farm activity"]);
+  assert.equal(metrics[0].hint, "2 sales recorded");
+  assert.equal(metrics[1].hint, "2 cost records");
+  assert.equal(metrics[1].tone, "red");
+  assert.equal(metrics[2].hint, "-13% margin");
+  assert.equal(metrics[2].tone, "red");
+  assert.equal(metrics[3].value, "5");
+  assert.equal(metrics[3].hint, "2 fields, 2 crops, 3 this week");
+
+  const noRevenueMetrics = buildDashboardMetrics({ revenue: 0, expenses: 0, profit: 0 }, [], []);
+  assert.equal(noRevenueMetrics[2].hint, "Add sales to measure");
+  assert.equal(noRevenueMetrics[2].tone, "green");
+});
+
+test("report export actions preserve native share, file, fallback, and error behavior", async () => {
+  const { buildReportModel, calculateFarmTotals } = loadTs("src/reports/currentReportRules.ts");
+  const { createReportExportActions } = loadTs("src/services/reportExports.ts");
+  const fields = [reportField({ crop: "Chilli", field: "East Field", area: "2 ha", variety: "ABE" })];
+  const records = [reportRecord({ type: "Sale", detail: "Market sale", quantity: "20 kg", amount: 1500 })];
+  const report = buildReportModel({ totals: calculateFarmTotals(records), fields, records, insights: [] });
+  const calls = [];
+  const deps = {
+    cacheDirectory: "cache://",
+    shareText: async (payload) => calls.push(["shareText", payload]),
+    printToFile: async ({ html }) => {
+      calls.push(["printToFile", html]);
+      return { uri: "cache://report.pdf" };
+    },
+    isFileSharingAvailable: async () => true,
+    shareFile: async (uri, options) => calls.push(["shareFile", uri, options]),
+    writeTextFile: async (uri, contents) => calls.push(["writeTextFile", uri, contents]),
+    alert: (title, message) => calls.push(["alert", title, message])
+  };
+
+  const actions = createReportExportActions(report, deps);
+  await actions.shareReport();
+  await actions.exportPdf();
+  await actions.exportCsv();
+
+  assert.deepEqual(calls[0][0], "shareText");
+  assert.equal(calls[0][1].title, "Masona Farms report");
+  assert.match(calls[0][1].message, /Revenue: .*\b1,500/);
+  assert.deepEqual(calls[1][0], "printToFile");
+  assert.match(calls[1][1], /Masona Farms Report/);
+  assertJsonEqual(calls[2], ["shareFile", "cache://report.pdf", { mimeType: "application/pdf", dialogTitle: "Share Masona Farms PDF report" }]);
+  assert.equal(calls[3][0], "writeTextFile");
+  assert.equal(calls[3][1], "cache://masona-farms-report.csv");
+  assert.match(calls[3][2], /^"Section","Date","Type"/);
+  assertJsonEqual(calls[4], ["shareFile", "cache://masona-farms-report.csv", { mimeType: "text/csv", dialogTitle: "Share Masona Farms CSV report" }]);
+
+  calls.length = 0;
+  const fallbackActions = createReportExportActions(report, { ...deps, isFileSharingAvailable: async () => false });
+  await fallbackActions.exportPdf();
+  await fallbackActions.exportCsv();
+  assert.deepEqual(calls.find((call) => call[0] === "alert"), ["alert", "PDF created", "cache://report.pdf"]);
+  assert.deepEqual(calls.at(-1)[0], "shareText");
+  assert.equal(calls.at(-1)[1].title, "Masona Farms CSV report");
+  assert.match(calls.at(-1)[1].message, /^"Section","Date","Type"/);
+
+  calls.length = 0;
+  const failingActions = createReportExportActions(report, { ...deps, shareText: async () => { throw new Error("share failed"); } });
+  await failingActions.shareReport();
+  assert.deepEqual(calls.at(-1), ["alert", "Share failed", "The report could not be shared right now."]);
+});
+
 function reportField(overrides = {}) {
   return {
     id: "field-1",

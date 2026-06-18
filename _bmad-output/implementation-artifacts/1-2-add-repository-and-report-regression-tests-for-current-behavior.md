@@ -4,7 +4,7 @@ baseline_commit: ba9bc3f519409273baf0fdce64ffea0fcf61b0e5
 
 # Story 1.2: Add Repository And Report Regression Tests For Current Behavior
 
-Status: in-progress
+Status: done
 
 Completion Note: Ultimate context engine analysis completed - comprehensive developer guide created.
 
@@ -49,7 +49,7 @@ so that improvements do not quietly break my farm history.
   - [x] Run `npm run test:migrations`.
   - [x] Run the new regression test command.
   - [x] Run `npm run typecheck`.
-  - [ ] Manually verify current report flows with seeded or real local data: Total spent, Total earned, Net profit, exports, archived-record exclusion, and existing record lists match pre-change behavior.
+  - [x] Manually verify current report flows with seeded or real local data: Total spent, Total earned, Net profit, exports, archived-record exclusion, and existing record lists match pre-change behavior.
 
 ### Review Findings
 
@@ -196,6 +196,7 @@ GPT-5 Codex
 - `npm run test:migrations` - passed, 7 tests.
 - `npm run test:regression` - passed, 4 tests after review patches.
 - `npm run typecheck` - passed.
+- Manual verification passed: reports open with existing/seeded local data; earned/revenue total matches Sale-only behavior; spent/expenses includes non-Sale/non-Harvest records; Harvest is ignored for money totals; archived record is hidden from normal lists/reports; existing record list matches pre-change behavior; Share, PDF, and CSV exports work with correct values/rows.
 
 ### Completion Notes List
 
@@ -205,7 +206,7 @@ GPT-5 Codex
 - Covered repository save/reload behavior for profile, fields, active crop cycles, records, photos, reminders, field update propagation, repeated initialization, and soft archive exclusion.
 - Covered current report behavior: `Sale` counts as earned, `Harvest` is ignored, `Payment` and other non-sale/non-harvest records count as spent, archived records are excluded, and share/HTML/CSV source data remains stable.
 - Code review patches strengthened repeated-initialization and export row assertions, and corrected the manual verification task to remain open until a device/local UI pass is performed.
-- Manual UI verification on a device was not run in this coding pass; the seeded regression fixtures validate the same report/export/archive behavior at source level.
+- Manual UI verification was completed by Chimwemwe and passed for reports, totals, archive exclusion, record lists, and Share/PDF/CSV exports.
 
 ### File List
 
@@ -220,3 +221,4 @@ GPT-5 Codex
 - 2026-06-18: Story created and marked ready for development.
 - 2026-06-18: Implemented repository and report regression tests; status moved to review.
 - 2026-06-18: Addressed code review patch findings; status returned to in-progress pending manual UI verification.
+- 2026-06-18: Manual verification passed; story marked done.

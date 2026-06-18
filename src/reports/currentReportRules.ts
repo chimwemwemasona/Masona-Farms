@@ -1,4 +1,32 @@
+import type { Ionicons } from "@expo/vector-icons";
 import type { CropField, FarmRecord, FarmTotals } from "../data/types";
+
+export type DashboardMetric = {
+  label: string;
+  value: string;
+  hint: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  tone: "green" | "teal" | "red";
+};
+
+export type ReportCard = [label: string, value: string, detail: string];
+
+export type ReportInsight = {
+  title: string;
+  detail: string;
+};
+
+export type ReportModel = {
+  totals: FarmTotals;
+  fields: CropField[];
+  records: FarmRecord[];
+  insights: ReportInsight[];
+  fieldCost: number;
+  costPerHa: number;
+  bestCrop: { name: string; detail: string };
+  agronomistSummary: string;
+  reportCards: ReportCard[];
+};
 
 const currency = new Intl.NumberFormat("en-ZM", {
   style: "currency",
@@ -17,6 +45,46 @@ export function calculateFieldReportValues(totals: FarmTotals, fields: CropField
   const totalArea = fields.reduce((sum, field) => sum + parseArea(field.area), 0);
   const costPerHa = totalArea ? totals.expenses / totalArea : 0;
   return { fieldCost, costPerHa };
+}
+
+export function buildDashboardMetrics(totals: FarmTotals, fields: CropField[], records: FarmRecord[]): DashboardMetric[] {
+  const salesCount = records.filter((record) => record.type === "Sale").length;
+  const expenseCount = records.filter((record) => record.type !== "Sale" && record.type !== "Harvest" && record.amount > 0).length;
+  const margin = totals.revenue ? Math.round((totals.profit / totals.revenue) * 100) : 0;
+  const uniqueCrops = new Set(fields.map((field) => field.crop)).size;
+  const recordsThisWeek = countRecordsThisWeek(records);
+  const profitTone = totals.profit < 0 ? "red" : "green";
+
+  return [
+    {
+      label: "Revenue",
+      value: currency.format(totals.revenue),
+      hint: `${salesCount} sale${salesCount === 1 ? "" : "s"} recorded`,
+      icon: "cash-outline",
+      tone: "green"
+    },
+    {
+      label: "Expenses",
+      value: currency.format(totals.expenses),
+      hint: `${expenseCount} cost record${expenseCount === 1 ? "" : "s"}`,
+      icon: "wallet-outline",
+      tone: totals.expenses > totals.revenue && totals.revenue > 0 ? "red" : "teal"
+    },
+    {
+      label: "Net profit",
+      value: currency.format(totals.profit),
+      hint: totals.revenue ? `${margin}% margin` : "Add sales to measure",
+      icon: "trending-up-outline",
+      tone: profitTone
+    },
+    {
+      label: "Farm activity",
+      value: String(records.length),
+      hint: `${fields.length} fields, ${uniqueCrops} crops, ${recordsThisWeek} this week`,
+      icon: "pulse-outline",
+      tone: "teal"
+    }
+  ];
 }
 
 export function getBestCrop(fields: CropField[], records: FarmRecord[]) {
@@ -44,6 +112,42 @@ export function buildAgronomistSummary(fields: CropField[], records: FarmRecord[
     .map((record) => `${record.type}: ${record.detail}${record.quantity ? ` (${record.quantity})` : ""}`)
     .join("; ");
   return `${watchField.crop} - ${watchField.field} is at ${watchField.stage} stage with ${watchField.progress}% progress and ${watchField.status.toLowerCase()} status. Recent history: ${history || "no linked records yet"}.`;
+}
+
+export function buildReportModel({
+  totals,
+  fields,
+  records,
+  insights
+}: {
+  totals: FarmTotals;
+  fields: CropField[];
+  records: FarmRecord[];
+  insights: ReportInsight[];
+}): ReportModel {
+  const { fieldCost, costPerHa } = calculateFieldReportValues(totals, fields);
+  const bestCrop = getBestCrop(fields, records);
+  const agronomistSummary = buildAgronomistSummary(fields, records);
+  const reportCards: ReportCard[] = [
+    ["Revenue", currency.format(totals.revenue), "All crop sales"],
+    ["Expenses", currency.format(totals.expenses), "Inputs and labor"],
+    ["Net profit", currency.format(totals.profit), "Season margin"],
+    ["Cost / field", currency.format(fieldCost), "Average spend"],
+    ["Cost / ha", currency.format(costPerHa), "Area-adjusted"],
+    ["Best crop", bestCrop.name, bestCrop.detail]
+  ];
+
+  return {
+    totals,
+    fields,
+    records,
+    insights,
+    fieldCost,
+    costPerHa,
+    bestCrop,
+    agronomistSummary,
+    reportCards
+  };
 }
 
 export function buildShareReport({
@@ -181,4 +285,15 @@ export function escapeHtml(value: string) {
 function parseArea(area: string) {
   const match = area.match(/[\d.]+/);
   return match ? Number(match[0]) : 0;
+}
+
+function countRecordsThisWeek(records: FarmRecord[]) {
+  const now = new Date();
+  const sevenDaysAgo = now.getTime() - 7 * 86400000;
+  return records.filter((record) => parseRecordDate(record.date).getTime() >= sevenDaysAgo).length;
+}
+
+function parseRecordDate(value: string) {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 }
